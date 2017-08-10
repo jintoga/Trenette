@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Trenette</string>
+    <string name="action_load_image_bundle">Load image bundle</string>
+    <string name="loading_image_bundle">Loading image bundle</string>
+    <string name="cancel">Cancel</string>
+    <string name="load">Load</string>
+    <string name="enter_address_of_image_bundle_hint">enter address of image bundle</string>
+    <string name="load_image_bundle_dialog_title">Load image bundle</string>
+    <string name="loaded_image_bundle">Image bundle loaded successfully</string>
+    <string name="page_number" formatted="false">%d/%d</string>
+</resources>
