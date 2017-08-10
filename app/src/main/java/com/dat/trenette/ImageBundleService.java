@@ -14,7 +14,7 @@ import rx.Observable;
  */
 
 class ImageBundleService {
-    private static final String ENDPOINT = "https://api.myjson.com";
+    private static final String ENDPOINT = "http://truvorskameikin.com";
     private ImageBundleApi imageBundleApi;
 
     ImageBundleService() {
@@ -32,7 +32,7 @@ class ImageBundleService {
     }
 
     interface ImageBundleApi {
-        @GET("/bins/{address}")
+        @GET("/{address}")
         Observable<ImageBundle> getImageBundle(@Path(value = "address", encoded = true) @NonNull String imageBundleAddress);
     }
 }
