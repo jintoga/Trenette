@@ -18,25 +18,17 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.dat.trenette.api.ImageBundleService;
 import com.squareup.picasso.Callback;
 import com.squareup.picasso.Picasso;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
-import rx.Observable;
-import rx.Subscription;
-import rx.android.schedulers.AndroidSchedulers;
 
-public class MainActivity extends AppCompatActivity implements ImageBundleLoader {
-
-    private static final String SAVED_CURRENT_IMAGE_INDEX = "SAVED_CURRENT_IMAGE_INDEX";
-    private static final String SAVED_IMAGE_PATHS = "SAVED_IMAGE_PATHS";
+public class MainActivity extends AppCompatActivity implements TrenetteView {
 
     @BindView(R.id.image)
     ImageView image;
@@ -44,76 +36,33 @@ public class MainActivity extends AppCompatActivity implements ImageBundleLoader
     TextView pageNumber;
     private EditText bundleAddress;
 
-    private static final int SWITCH_TIME = 10;
+    private AlertDialog loadImageBundleDialog;
 
-    private static final String ASSET_PATH = "file:///android_asset/";
-    private ArrayList<String> imagePaths = new ArrayList<>();
-    private final String[] holderImageNames = {
-            "carissa-gan-76325.jpg", "eaters-collective-132772.jpg",
-            "eaters-collective-132773.jpg", "jakub-kapusnak-296128.jpg"
-    };
-
-    private Subscription subscription;
-    private ImageBundlePresenter presenter;
-
-    private int currentImageIndex = 0;
+    private TrenettePresenter presenter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
+        presenter = new TrenettePresenter(new ImageBundleService(), this);
         if (savedInstanceState != null) {
-            restoreSavedData(savedInstanceState);
+            presenter.restoreData(savedInstanceState);
         } else {
-            initImagePaths();
+            presenter.initLocalImagePaths();
         }
-        presenter = new ImageBundlePresenter(new ImageBundleService(), this);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        if (subscription == null) {
-            initSwitchImageObservable();
-        }
+        presenter.createSwitchImageObservable();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        if (subscription != null && !subscription.isUnsubscribed()) {
-            subscription.unsubscribe();
-            subscription = null;
-        }
-    }
-
-    private void initSwitchImageObservable() {
-        subscription =
-                Observable.interval(SWITCH_TIME, TimeUnit.SECONDS, AndroidSchedulers.mainThread())
-                        .doOnNext(n -> {
-                            increaseCurrentImageIndex();
-                            loadImage();
-                        })
-                        .doOnSubscribe(this::loadImage)
-                        .subscribe();
-    }
-
-    private void restoreSavedData(@NonNull Bundle savedInstanceState) {
-        currentImageIndex = savedInstanceState.getInt(SAVED_CURRENT_IMAGE_INDEX, 0);
-        ArrayList<String> savedImagePaths = savedInstanceState.getStringArrayList(SAVED_IMAGE_PATHS);
-        if (savedImagePaths != null) {
-            imagePaths = savedImagePaths;
-        } else {
-            initImagePaths();
-        }
-    }
-
-    private void initImagePaths() {
-        for (String imageAssetsName : holderImageNames) {
-            String imagePath = ASSET_PATH + imageAssetsName;
-            imagePaths.add(imagePath);
-        }
+        presenter.destroySwitchImageObservable();
     }
 
     @Override
@@ -130,8 +79,6 @@ public class MainActivity extends AppCompatActivity implements ImageBundleLoader
         }
         return super.onOptionsItemSelected(item);
     }
-
-    private AlertDialog loadImageBundleDialog;
 
     private void showLoadImageBundleDialog() {
         if (loadImageBundleDialog == null) {
@@ -152,12 +99,33 @@ public class MainActivity extends AppCompatActivity implements ImageBundleLoader
         loadImageBundleDialog.show();
     }
 
-    private void loadImage() {
-        String imagePath = getImagePath();
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        presenter.saveData(outState);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    public void onLoadingImageBundle() {
+        Toast.makeText(this, R.string.loading_image_bundle, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onLoadImageBundleSuccess() {
+        Toast.makeText(this, R.string.loaded_image_bundle, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onLoadImageBundleFailure(@NonNull Throwable e) {
+        Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void bindImageData(@Nullable String imagePath) {
         if (imagePath == null || imagePath.isEmpty()) {
             return;
         }
-        updatePageNumber();
         final AtomicBoolean playAnimation = new AtomicBoolean(true);
         Picasso.with(this).load(imagePath).fit().centerInside().into(image, new Callback() {
             @Override
@@ -179,51 +147,9 @@ public class MainActivity extends AppCompatActivity implements ImageBundleLoader
         });
     }
 
-    @Nullable
-    private String getImagePath() {
-        if (imagePaths.isEmpty()) {
-            return null;
-        }
-        return imagePaths.get(currentImageIndex);
-    }
-
-    private void increaseCurrentImageIndex() {
-        if (currentImageIndex >= 0 && currentImageIndex < imagePaths.size() - 1) {
-            currentImageIndex++;
-        } else {
-            currentImageIndex = 0;
-        }
-    }
-
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        outState.putInt(SAVED_CURRENT_IMAGE_INDEX, currentImageIndex);
-        outState.putStringArrayList(SAVED_IMAGE_PATHS, imagePaths);
-        super.onSaveInstanceState(outState);
+    public void bindPaginationData(int currentImageIndex, int size) {
+        pageNumber.setText(String.format(Locale.getDefault(), getString(R.string.page_number), currentImageIndex + 1, size));
     }
 
-    @Override
-    public void loading() {
-        Toast.makeText(this, R.string.loading_image_bundle, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void imageBundleLoaded(@NonNull List<String> urls) {
-        imagePaths.addAll(urls);
-        updatePageNumber();
-    }
-
-    private void updatePageNumber() {
-        pageNumber.setText(String.format(Locale.getDefault(), getString(R.string.page_number), currentImageIndex + 1, imagePaths.size()));
-    }
-
-    @Override
-    public void loadSuccess() {
-        Toast.makeText(this, R.string.loaded_image_bundle, Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void loadFailure(@NonNull Throwable e) {
-        Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
-    }
 }
